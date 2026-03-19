@@ -204,7 +204,7 @@ def count_all(text: str, only: list[str] | None = None) -> list[tuple[TokenizerI
             continue
         # Skip duplicate encoding (gpt4o and gpt4o-mini share o200k_base)
         result = count_tokens(text, info)
-        if result and result.tokens >= 0:
+        if result and result.tokens > 0:
             results.append((info, result))
     return results
 

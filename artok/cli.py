@@ -11,8 +11,8 @@ import sys
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 _real_stderr = sys.stderr
 
-from artok.core import count_all, TOKENIZERS
-from artok.display import display_results, console
+from artok.core import count_all, count_words, TOKENIZERS
+from artok.display import display_results, display_json, console
 
 
 def main():
@@ -60,6 +60,11 @@ def main():
         metavar="VOLUME",
         help="Estimate costs for VOLUME million tokens worth of Arabic text (e.g., --cost 10 for 10M tokens)",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON (for scripting/piping)",
+    )
 
     args = parser.parse_args()
 
@@ -104,14 +109,23 @@ def main():
         if args.english:
             english_results = count_all(args.english, only=only)
 
-    display_results(
-        text=text,
-        results=results,
-        english_text=args.english,
-        english_results=english_results,
-        show_tokens=args.show_tokens,
-        cost_volume=args.cost,
-    )
+    if args.json:
+        display_json(
+            text=text,
+            results=results,
+            english_text=args.english,
+            english_results=english_results,
+            cost_volume=args.cost,
+        )
+    else:
+        display_results(
+            text=text,
+            results=results,
+            english_text=args.english,
+            english_results=english_results,
+            show_tokens=args.show_tokens,
+            cost_volume=args.cost,
+        )
 
 
 if __name__ == "__main__":

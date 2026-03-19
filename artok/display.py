@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -10,6 +12,78 @@ from rich.text import Text
 from artok.core import TokenizerInfo, TokenizerResult, count_words
 
 console = Console()
+
+
+def display_json(
+    text: str,
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+    english_text: str | None = None,
+    english_results: list[tuple[TokenizerInfo, TokenizerResult]] | None = None,
+    cost_volume: float | None = None,
+):
+    """Output results as JSON."""
+    words = count_words(text)
+    chars = len(text)
+    best_count = min(r.tokens for _, r in results) if results else 0
+
+    en_lookup: dict[str, int] = {}
+    if english_results:
+        for info, result in english_results:
+            en_lookup[info.name] = result.tokens
+
+    results.sort(key=lambda x: x[1].tokens)
+
+    tokenizers = []
+    for info, result in results:
+        entry = {
+            "name": info.name,
+            "display_name": result.name,
+            "tokens": result.tokens,
+            "tokens_per_word": round(result.tokens / words, 2) if words > 0 else 0,
+            "tax_vs_best": round(result.tokens / best_count, 2) if best_count > 0 else 0,
+            "cost_per_1m_input": info.cost_input,
+            "cost_per_1m_output": info.cost_output,
+        }
+        en_count = en_lookup.get(info.name)
+        if en_count:
+            entry["en_tokens"] = en_count
+            entry["ar_en_ratio"] = round(result.tokens / en_count, 2) if en_count > 0 else 0
+
+        if cost_volume and info.cost_input:
+            entry["cost_estimate"] = {
+                "volume_millions": cost_volume,
+                "input_cost": round(cost_volume * info.cost_input, 2),
+                "output_cost": round(cost_volume * (info.cost_output or 0), 2),
+                "total": round(cost_volume * info.cost_input + cost_volume * (info.cost_output or 0), 2),
+            }
+            if en_count and result.tokens > 0:
+                ratio = result.tokens / en_count
+                en_vol = cost_volume / ratio
+                en_total = en_vol * info.cost_input + en_vol * (info.cost_output or 0)
+                entry["cost_estimate"]["en_equivalent_total"] = round(en_total, 2)
+                entry["cost_estimate"]["extra_cost"] = round(entry["cost_estimate"]["total"] - en_total, 2)
+
+        tokenizers.append(entry)
+
+    output = {
+        "text": text,
+        "words": words,
+        "characters": chars,
+        "tokenizers": tokenizers,
+    }
+
+    if english_text:
+        output["english_text"] = english_text
+
+    if results:
+        avg_ar = sum(r.tokens for _, r in results) / len(results)
+        if en_lookup:
+            avg_en = sum(en_lookup.values()) / len(en_lookup)
+            if avg_en > 0:
+                output["average_ar_en_ratio"] = round(avg_ar / avg_en, 2)
+
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+
 
 
 def _display_cost_estimate(
@@ -184,7 +258,7 @@ def display_results(
     header.append(" - Arabic Token Tax Calculator\n\n", style="dim")
     header.append("Input: ", style="bold")
     header.append(f'"{display_text}"', style="italic")
-    header.append(f"\nWords: {words}", style="dim")
+    header.append(f"\nWords: {words}  |  Chars: {len(text)}", style="dim")
     if english_text:
         en_display = english_text if len(english_text) <= 60 else english_text[:57] + "..."
         header.append(f'\nEnglish: "{en_display}"', style="dim blue")
