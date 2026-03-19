@@ -53,6 +53,13 @@ def main():
         default=None,
         help="Read text from file",
     )
+    parser.add_argument(
+        "-c", "--cost",
+        type=float,
+        default=None,
+        metavar="VOLUME",
+        help="Estimate costs for VOLUME million tokens worth of Arabic text (e.g., --cost 10 for 10M tokens)",
+    )
 
     args = parser.parse_args()
 
@@ -103,6 +110,7 @@ def main():
         english_text=args.english,
         english_results=english_results,
         show_tokens=args.show_tokens,
+        cost_volume=args.cost,
     )
 
 

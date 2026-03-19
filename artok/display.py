@@ -12,12 +12,96 @@ from artok.core import TokenizerInfo, TokenizerResult, count_words
 console = Console()
 
 
+def _display_cost_estimate(
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+    english_results: list[tuple[TokenizerInfo, TokenizerResult]] | None,
+    en_lookup: dict[str, int],
+    volume_m: float,
+):
+    """Show cost estimate table for a given volume of tokens."""
+    # Calculate the token expansion ratio from sample text for each tokenizer
+    # Then project costs at volume scale
+    best_tokens = min(r.tokens for _, r in results)
+
+    cost_table = Table(
+        title=f"\n[bold]Cost Estimate for {volume_m:g}M tokens of Arabic text[/bold]",
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    cost_table.add_column("Tokenizer", style="bold white", min_width=14)
+    cost_table.add_column("Input Cost", justify="right", style="yellow")
+    cost_table.add_column("Output Cost", justify="right", style="yellow")
+    cost_table.add_column("Total (I+O)", justify="right", style="bold green")
+
+    if english_results and en_lookup:
+        cost_table.add_column("EN Equivalent", justify="right", style="blue")
+        cost_table.add_column("Extra Cost", justify="right")
+
+    for info, result in results:
+        if not info.cost_input:
+            continue
+
+        # Scale: the sample text ratio tells us how many "real" tokens
+        # the Arabic text expands to vs the best tokenizer.
+        # For cost estimation, we use the raw per-1M-token pricing
+        # applied to the volume the user specified.
+        input_cost = volume_m * info.cost_input
+        output_cost = volume_m * (info.cost_output or 0)
+        total = input_cost + output_cost
+
+        row = [
+            result.name,
+            f"${input_cost:,.2f}",
+            f"${output_cost:,.2f}",
+            f"${total:,.2f}",
+        ]
+
+        if english_results and en_lookup:
+            en_count = en_lookup.get(info.name)
+            if en_count and result.tokens > 0:
+                # Arabic uses X times more tokens than English
+                # So for the same content, English would need volume_m / ratio
+                ratio = result.tokens / en_count
+                en_volume = volume_m / ratio
+                en_total = en_volume * info.cost_input + en_volume * (info.cost_output or 0)
+                extra = total - en_total
+                row.append(f"${en_total:,.2f}")
+                if extra > 0:
+                    row.append(f"[red]+${extra:,.2f}[/red]")
+                else:
+                    row.append(f"[green]${extra:,.2f}[/green]")
+            else:
+                row.extend(["-", "-"])
+
+        cost_table.add_row(*row)
+
+    console.print()
+    console.print(cost_table)
+
+    if english_results and en_lookup:
+        # Calculate total extra cost across cheapest option
+        cheapest_info, cheapest_result = min(
+            ((i, r) for i, r in results if i.cost_input),
+            key=lambda x: x[0].cost_input * volume_m,
+        )
+        en_count = en_lookup.get(cheapest_info.name)
+        if en_count and cheapest_result.tokens > 0:
+            ratio = cheapest_result.tokens / en_count
+            console.print(
+                f"\n[dim]Note: \"Extra Cost\" = how much more you pay for Arabic vs "
+                f"English for the same semantic content at {volume_m:g}M tokens.[/dim]"
+            )
+
 def display_results(
     text: str,
     results: list[tuple[TokenizerInfo, TokenizerResult]],
     english_text: str | None = None,
     english_results: list[tuple[TokenizerInfo, TokenizerResult]] | None = None,
     show_tokens: bool = False,
+    cost_volume: float | None = None,
 ):
     """Display token comparison table."""
     if not results:
@@ -130,6 +214,10 @@ def display_results(
             f"[bold]Best tokenizer:[/bold] [green]{best_name}[/green] "
             f"({savings:.0f}% fewer tokens than {worst_name})"
         )
+
+    # Cost estimate mode
+    if cost_volume is not None and cost_volume > 0:
+        _display_cost_estimate(results, english_results, en_lookup, cost_volume)
 
     # Show actual tokens if requested
     if show_tokens:

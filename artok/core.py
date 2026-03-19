@@ -37,6 +37,15 @@ class TokenizerInfo:
 
 
 TOKENIZERS: list[TokenizerInfo] = [
+    # --- OpenAI ---
+    TokenizerInfo(
+        name="gpt4.1",
+        display_name="GPT-4.1",
+        backend="tiktoken",
+        model_id="o200k_base",
+        cost_input=2.00,
+        cost_output=8.00,
+    ),
     TokenizerInfo(
         name="gpt4o",
         display_name="GPT-4o",
@@ -61,14 +70,32 @@ TOKENIZERS: list[TokenizerInfo] = [
         cost_input=2.50,
         cost_output=10.00,
     ),
+    # --- Anthropic ---
     TokenizerInfo(
-        name="claude",
+        name="claude-opus",
+        display_name="Claude Opus",
+        backend="transformers",
+        model_id="Xenova/claude-tokenizer",
+        cost_input=5.00,
+        cost_output=25.00,
+    ),
+    TokenizerInfo(
+        name="claude-sonnet",
         display_name="Claude Sonnet",
         backend="transformers",
         model_id="Xenova/claude-tokenizer",
         cost_input=3.00,
         cost_output=15.00,
     ),
+    TokenizerInfo(
+        name="claude-haiku",
+        display_name="Claude Haiku",
+        backend="transformers",
+        model_id="Xenova/claude-tokenizer",
+        cost_input=0.80,
+        cost_output=4.00,
+    ),
+    # --- Meta ---
     TokenizerInfo(
         name="llama3",
         display_name="Llama 3",
@@ -77,6 +104,7 @@ TOKENIZERS: list[TokenizerInfo] = [
         cost_input=0.18,
         cost_output=0.18,
     ),
+    # --- Alibaba ---
     TokenizerInfo(
         name="qwen",
         display_name="Qwen 2.5",
@@ -85,6 +113,7 @@ TOKENIZERS: list[TokenizerInfo] = [
         cost_input=0.10,
         cost_output=0.15,
     ),
+    # --- Mistral ---
     TokenizerInfo(
         name="mistral",
         display_name="Mistral",
