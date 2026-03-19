@@ -3,12 +3,12 @@
 
 Output demo.gif
 Set Shell "zsh"
-Set FontSize 14
+Set FontSize 13
 Set Width 1200
-Set Height 800
+Set Height 700
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 40ms
-Set Padding 20
+Set TypingSpeed 30ms
+Set Padding 16
 
 # Activate venv
 Hide
@@ -17,34 +17,40 @@ Enter
 Sleep 500ms
 Show
 
-# --- Scene 1: Basic comparison ---
-Sleep 500ms
-Type 'artok "الذكاء الاصطناعي يغير العالم" -e "AI is changing the world"'
-Sleep 500ms
+# --- Scene 1: Basic — the tax is real ---
+Sleep 300ms
+Type 'artok "الذكاء الاصطناعي يغير العالم" -e "AI is changing the world" -t gpt4.1,claude-sonnet,qwen3.5,deepseek,mistral-small'
+Sleep 400ms
 Enter
 Sleep 5s
 
-# --- Scene 2: Token visualization ---
-Type 'artok "مرحبا بالعالم العربي" --viz gpt4o,claude-sonnet'
-Sleep 500ms
+# --- Scene 2: Benchmark ---
+Type 'artok --benchmark -t gpt4.1,claude-sonnet,qwen3.5,deepseek,mistral-small,llama4'
+Sleep 400ms
 Enter
 Sleep 6s
 
-# --- Scene 3: Cost estimate ---
-Type 'artok "نص عربي طويل للاختبار" -e "Long Arabic text for testing" --cost 50'
-Sleep 500ms
+# --- Scene 3: Tashkeel ---
+Type 'artok "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ" --tashkeel -t gpt4.1,claude-sonnet,qwen3.5'
+Sleep 400ms
 Enter
 Sleep 5s
 
-# --- Scene 4: Budget recommendation ---
-Type 'artok "الذكاء الاصطناعي" --recommend 100 --words 5'
-Sleep 500ms
+# --- Scene 4: Heatmap ---
+Type 'artok "الذكاء الاصطناعي يغير حياتنا بشكل جذري ومستمر" --heatmap -t gpt4.1'
+Sleep 400ms
+Enter
+Sleep 4s
+
+# --- Scene 5: Dialects ---
+Type 'artok --dialects -t gpt4.1,claude-sonnet,qwen3.5,deepseek'
+Sleep 400ms
 Enter
 Sleep 5s
 
-# --- Scene 5: Chart ---
-Type 'artok "بسم الله الرحمن الرحيم" -e "In the name of God" --chart'
-Sleep 500ms
+# --- Scene 6: Leaderboard ---
+Type 'artok "الذكاء الاصطناعي يغير العالم" --leaderboard -t gpt4.1,gpt4.1-nano,claude-sonnet,claude-haiku,qwen3.5,deepseek,mistral-small'
+Sleep 400ms
 Enter
 Sleep 5s
 

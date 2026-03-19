@@ -14,6 +14,19 @@ from artok.core import TokenizerInfo, TokenizerResult, count_words
 console = Console()
 
 
+def enable_recording():
+    """Enable recording mode for SVG export."""
+    global console
+    console = Console(record=True, width=90, force_terminal=True)
+
+
+def export_svg(path: str):
+    """Export recorded output as SVG."""
+    svg = console.export_svg(title="artok \u2014 Arabic Token Tax Calculator")
+    with open(path, "w") as f:
+        f.write(svg)
+
+
 # ---------------------------------------------------------------------------
 # JSON output
 # ---------------------------------------------------------------------------
@@ -299,6 +312,530 @@ def display_viz(
             str(tid),
             str(byte_count),
         )
+
+    console.print(table)
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Switch-from savings
+# ---------------------------------------------------------------------------
+
+def display_switch_from(
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+    from_name: str,
+    volume_m: float,
+):
+    """Show savings from switching away from a specific tokenizer."""
+    # Find the source tokenizer
+    source = None
+    for info, result in results:
+        if info.name == from_name:
+            source = (info, result)
+            break
+
+    if not source:
+        console.print(f"[red]Tokenizer '{from_name}' not found.[/red]")
+        return
+
+    src_info, src_result = source
+
+    console.print()
+    console.print(f"[bold magenta]artok[/bold magenta] [dim]- Switching from[/dim] [bold red]{src_result.name}[/bold red]")
+    console.print(f"[dim]At {volume_m:g}M tokens/month[/dim]")
+    console.print()
+
+    src_total_rate = (src_info.cost_input or 0) + (src_info.cost_output or 0)
+    src_monthly = volume_m * src_total_rate
+
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    table.add_column("Switch to", style="bold white", min_width=14)
+    table.add_column("Tokens", justify="right", style="dim")
+    table.add_column("Monthly Cost", justify="right", style="yellow")
+    table.add_column("Savings", justify="right")
+    table.add_column("Savings %", justify="right")
+
+    results_sorted = sorted(results, key=lambda x: (x[0].cost_input or 0) + (x[0].cost_output or 0))
+
+    for info, result in results_sorted:
+        if info.name == from_name:
+            continue
+
+        total_rate = (info.cost_input or 0) + (info.cost_output or 0)
+        # Account for token ratio — same content costs different tokens
+        if src_result.tokens > 0:
+            ratio = result.tokens / src_result.tokens
+            adjusted_volume = volume_m * ratio
+        else:
+            adjusted_volume = volume_m
+
+        monthly = adjusted_volume * total_rate
+        savings = src_monthly - monthly
+        pct = (savings / src_monthly * 100) if src_monthly > 0 else 0
+
+        if savings > 0:
+            sav_str = f"[green]-${savings:,.2f}[/green]"
+            pct_str = f"[green]{pct:.0f}%[/green]"
+        elif savings < 0:
+            sav_str = f"[red]+${abs(savings):,.2f}[/red]"
+            pct_str = f"[red]+{abs(pct):.0f}%[/red]"
+        else:
+            sav_str = "$0.00"
+            pct_str = "0%"
+
+        table.add_row(
+            result.name,
+            str(result.tokens),
+            f"${monthly:,.2f}",
+            sav_str,
+            pct_str,
+        )
+
+    console.print(f"  [dim]Current:[/dim] [bold]{src_result.name}[/bold] = [red]${src_monthly:,.2f}/month[/red]")
+    console.print()
+    console.print(table)
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Multi-language comparison
+# ---------------------------------------------------------------------------
+
+def display_compare_langs(
+    arabic_text: str,
+    arabic_results: list[tuple[TokenizerInfo, TokenizerResult]],
+    lang_results: dict[str, tuple[str, list[tuple[TokenizerInfo, TokenizerResult]]]],
+):
+    """Compare Arabic token costs against multiple languages."""
+    console.print()
+    console.print("[bold magenta]artok[/bold magenta] [dim]- Multi-Language Comparison[/dim]")
+    console.print()
+
+    # Pick a representative tokenizer set (use all that have results)
+    tokenizer_names = []
+    for info, _ in arabic_results:
+        if info.name not in tokenizer_names:
+            tokenizer_names.append(info.name)
+
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    table.add_column("Tokenizer", style="bold white", min_width=14)
+    table.add_column("Arabic", justify="right", style="yellow")
+
+    lang_order = list(lang_results.keys())
+    for lang in lang_order:
+        table.add_column(lang.upper(), justify="right", style="blue")
+    table.add_column("AR vs Best", justify="right")
+
+    # Build lookups
+    ar_lookup = {info.name: result.tokens for info, result in arabic_results}
+    lang_lookups = {}
+    for lang, (_, lr) in lang_results.items():
+        lang_lookups[lang] = {info.name: result.tokens for info, result in lr}
+
+    # Build display name lookup
+    display_names = {info.name: result.name for info, result in arabic_results}
+
+    for tname in tokenizer_names:
+        ar_count = ar_lookup.get(tname)
+        if not ar_count:
+            continue
+
+        row = [display_names.get(tname, tname), str(ar_count)]
+
+        best_other = float("inf")
+        for lang in lang_order:
+            count = lang_lookups.get(lang, {}).get(tname)
+            if count:
+                row.append(str(count))
+                best_other = min(best_other, count)
+            else:
+                row.append("-")
+
+        if best_other < float("inf") and best_other > 0:
+            ratio = ar_count / best_other
+            color = "green" if ratio <= 1.5 else ("yellow" if ratio <= 2.5 else "red")
+            row.append(f"[{color}]{ratio:.1f}x[/{color}]")
+        else:
+            row.append("-")
+
+        table.add_row(*row)
+
+    # Print texts
+    ar_display = arabic_text if len(arabic_text) <= 40 else arabic_text[:37] + "..."
+    console.print(f"  [bold]AR:[/bold] {ar_display}")
+    for lang, (text, _) in lang_results.items():
+        t_display = text if len(text) <= 40 else text[:37] + "..."
+        console.print(f"  [bold]{lang.upper()}:[/bold] {t_display}")
+
+    console.print()
+    console.print(table)
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Tashkeel (diacritics) comparison
+# ---------------------------------------------------------------------------
+
+def display_tashkeel(
+    text: str,
+    results_with: list[tuple[TokenizerInfo, TokenizerResult]],
+    results_without: list[tuple[TokenizerInfo, TokenizerResult]],
+):
+    """Show a comparison table of token counts with/without Arabic diacritics."""
+    console.print()
+    console.print("[bold magenta]artok[/bold magenta] [dim]- Tashkeel (Diacritics) Analysis[/dim]")
+    console.print()
+
+    # Build lookup for without-diacritics results
+    without_lookup: dict[str, int] = {}
+    for info, result in results_without:
+        without_lookup[info.name] = result.tokens
+
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    table.add_column("Tokenizer", style="bold white", min_width=14)
+    table.add_column("With Tashkeel", justify="right", style="yellow")
+    table.add_column("Without", justify="right", style="green")
+    table.add_column("Inflation %", justify="right")
+
+    results_with.sort(key=lambda x: x[1].tokens)
+
+    for info, result in results_with:
+        without_count = without_lookup.get(info.name)
+        if without_count is None:
+            continue
+
+        if without_count > 0:
+            inflation = ((result.tokens - without_count) / without_count) * 100
+        else:
+            inflation = 0.0
+
+        if inflation <= 0:
+            inf_str = f"[green]{inflation:+.1f}%[/green]"
+        elif inflation <= 10:
+            inf_str = f"[yellow]+{inflation:.1f}%[/yellow]"
+        else:
+            inf_str = f"[red]+{inflation:.1f}%[/red]"
+
+        table.add_row(
+            result.name,
+            str(result.tokens),
+            str(without_count),
+            inf_str,
+        )
+
+    console.print(table)
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Token cost heatmap
+# ---------------------------------------------------------------------------
+
+_HEATMAP_STYLES = {
+    1: "green",
+    2: "yellow",
+    3: "dark_orange",
+    4: "red",
+    5: "bold red",
+}
+
+
+def display_heatmap(
+    text: str,
+    info: TokenizerInfo,
+    words_tokens: list[tuple[str, int]],
+):
+    """Show text with each word colored by its token cost."""
+    console.print()
+    console.print(
+        f"[bold magenta]artok[/bold magenta] [dim]- Token Cost Heatmap[/dim] "
+        f"([bold]{info.display_name}[/bold])"
+    )
+    console.print()
+
+    # Build colored text
+    colored = Text()
+    for i, (word, count) in enumerate(words_tokens):
+        if count >= 5:
+            style = _HEATMAP_STYLES[5]
+        else:
+            style = _HEATMAP_STYLES.get(count, "green")
+        colored.append(word, style=style)
+        if i < len(words_tokens) - 1:
+            colored.append(" ")
+
+    console.print(f"  {colored}")
+    console.print()
+
+    # Legend
+    legend = Text("  Legend: ")
+    legend.append("1 tok ", style="green")
+    legend.append("2 tok ", style="yellow")
+    legend.append("3 tok ", style="dark_orange")
+    legend.append("4 tok ", style="red")
+    legend.append("5+ tok", style="bold red")
+    console.print(legend)
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Leaderboard (composite score ranking)
+# ---------------------------------------------------------------------------
+
+def display_leaderboard(
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+):
+    """Rank all tokenizers by composite score (efficiency + cost + value)."""
+    if not results:
+        console.print("[red]No tokenizers available.[/red]")
+        return
+
+    # Filter to tokenizers with pricing info
+    scored = []
+    for info, result in results:
+        if info.cost_input is None:
+            continue
+        total_rate = (info.cost_input or 0) + (info.cost_output or 0)
+        scored.append((info, result, total_rate))
+
+    if not scored:
+        console.print("[red]No tokenizers with pricing data.[/red]")
+        return
+
+    best_tokens = min(r.tokens for _, r, _ in scored)
+    cheapest_rate = min(tr for _, _, tr in scored)
+
+    # Calculate scores
+    entries = []
+    for info, result, total_rate in scored:
+        efficiency = (best_tokens / result.tokens) * 50 if result.tokens > 0 else 0
+        cost = (cheapest_rate / total_rate) * 30 if total_rate > 0 else 0
+        value_raw = efficiency / (total_rate + 0.01)
+        entries.append((info, result, total_rate, efficiency, cost, value_raw))
+
+    # Normalize value scores to max 20
+    max_value_raw = max(e[5] for e in entries) if entries else 1
+    final = []
+    for info, result, total_rate, efficiency, cost, value_raw in entries:
+        value = (value_raw / max_value_raw) * 20 if max_value_raw > 0 else 0
+        total = efficiency + cost + value
+        final.append((info, result, total_rate, efficiency, cost, value, total))
+
+    # Sort by total descending
+    final.sort(key=lambda x: x[6], reverse=True)
+
+    # Determine verdicts
+    best_overall_idx = 0
+    best_value_idx = max(range(len(final)), key=lambda i: final[i][5])
+    most_efficient_idx = max(range(len(final)), key=lambda i: final[i][3])
+
+    console.print()
+    console.print("[bold magenta]artok[/bold magenta] [dim]- Tokenizer Leaderboard[/dim]")
+    console.print()
+
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    table.add_column("Rank", justify="right", style="bold", width=4)
+    table.add_column("Tokenizer", style="bold white", min_width=14)
+    table.add_column("Tokens", justify="right", style="yellow")
+    table.add_column("$/1M (I+O)", justify="right", style="dim")
+    table.add_column("Efficiency", justify="right")
+    table.add_column("Cost", justify="right")
+    table.add_column("Value", justify="right")
+    table.add_column("Total", justify="right")
+    table.add_column("Verdict", min_width=14)
+
+    medals = {0: "\U0001f947 ", 1: "\U0001f948 ", 2: "\U0001f949 "}
+
+    for rank, (info, result, total_rate, efficiency, cost, value, total) in enumerate(final):
+        # Medal prefix for top 3
+        medal = medals.get(rank, "")
+        name_str = f"{medal}{result.name}"
+
+        # Color total score
+        if total >= 70:
+            total_str = f"[green]{total:.1f}[/green]"
+        elif total >= 40:
+            total_str = f"[yellow]{total:.1f}[/yellow]"
+        else:
+            total_str = f"[red]{total:.1f}[/red]"
+
+        # Verdict
+        verdict = ""
+        if rank == best_overall_idx:
+            verdict = "[bold green]Best overall[/bold green]"
+        elif rank == best_value_idx:
+            verdict = "[green]Best value[/green]"
+        elif rank == most_efficient_idx:
+            verdict = "[cyan]Most efficient[/cyan]"
+
+        table.add_row(
+            str(rank + 1),
+            name_str,
+            str(result.tokens),
+            f"${total_rate:.2f}",
+            f"{efficiency:.1f}",
+            f"{cost:.1f}",
+            f"{value:.1f}",
+            total_str,
+            verdict,
+        )
+
+    console.print(table)
+    console.print()
+    console.print("[dim]  Score = Efficiency (max 50) + Cost (max 30) + Value (max 20)[/dim]")
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Benchmark (Arabic Friendliness Score)
+# ---------------------------------------------------------------------------
+
+def display_benchmark(benchmark_results: list[dict]):
+    """Display Arabic friendliness benchmark scores for each tokenizer."""
+    console.print()
+    console.print("[bold magenta]artok[/bold magenta] [dim]- Arabic Friendliness Benchmark[/dim]")
+    console.print()
+
+    # Short column names for categories
+    col_map = {
+        "News (MSA)": "News",
+        "Poetry": "Poetry",
+        "Quran": "Quran",
+        "Technical": "Tech",
+        "Conversational": "Conv",
+        "Dialect (Egyptian)": "Egy",
+        "Dialect (Gulf)": "Gulf",
+        "Social Media": "Social",
+    }
+
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    table.add_column("Tokenizer", style="bold white", min_width=14)
+    for full_name, short in col_map.items():
+        table.add_column(short, justify="right", style="dim white")
+    table.add_column("SCORE", justify="right", style="bold")
+
+    # Sort by overall score (highest first)
+    benchmark_results.sort(key=lambda x: x["score"], reverse=True)
+
+    for entry in benchmark_results:
+        row = [entry["name"]]
+        for cat in col_map:
+            cat_score = entry["categories"].get(cat, 0)
+            row.append(f"{cat_score:.0f}")
+
+        score = entry["score"]
+        if score >= 70:
+            score_str = f"[green]{score:.1f}[/green]"
+        elif score >= 40:
+            score_str = f"[yellow]{score:.1f}[/yellow]"
+        else:
+            score_str = f"[red]{score:.1f}[/red]"
+        row.append(score_str)
+
+        table.add_row(*row)
+
+    # Winner line
+    if benchmark_results:
+        console.print(table)
+        console.print(
+            f"\n[bold]Winner:[/bold] [green]{benchmark_results[0]['name']}[/green] "
+            f"with a score of [bold green]{benchmark_results[0]['score']:.1f}/100[/bold green]"
+        )
+
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Dialect comparison
+# ---------------------------------------------------------------------------
+
+def display_dialects(dialect_results: dict[str, tuple[str, list[tuple[TokenizerInfo, TokenizerResult]]]]):
+    """Display dialect tokenization comparison."""
+    console.print()
+    console.print("[bold magenta]artok[/bold magenta] [dim]- Arabic Dialect Comparison[/dim]")
+    console.print()
+
+    # Show sample texts
+    for dialect, (text, _) in dialect_results.items():
+        console.print(f"  [bold]{dialect}:[/bold] {text}")
+    console.print()
+
+    dialect_names = list(dialect_results.keys())
+
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    table.add_column("Tokenizer", style="bold white", min_width=14)
+    for dialect in dialect_names:
+        table.add_column(dialect, justify="right", style="dim white")
+    table.add_column("Best dialect", justify="right")
+
+    # Build lookup: tokenizer_name -> {dialect -> tokens}
+    tok_lookup: dict[str, dict[str, int]] = {}
+    tok_display: dict[str, str] = {}
+    for dialect, (_, results) in dialect_results.items():
+        for info, result in results:
+            if info.name not in tok_lookup:
+                tok_lookup[info.name] = {}
+                tok_display[info.name] = result.name
+            tok_lookup[info.name][dialect] = result.tokens
+
+    for tok_name in tok_lookup:
+        row = [tok_display[tok_name]]
+        counts = tok_lookup[tok_name]
+
+        best_dialect = None
+        best_count = float("inf")
+        for dialect in dialect_names:
+            count = counts.get(dialect)
+            if count is not None:
+                row.append(str(count))
+                if count < best_count:
+                    best_count = count
+                    best_dialect = dialect
+            else:
+                row.append("-")
+
+        if best_dialect:
+            row.append(f"[green]{best_dialect}[/green]")
+        else:
+            row.append("-")
+
+        table.add_row(*row)
 
     console.print(table)
     console.print()

@@ -1,0 +1,150 @@
+{
+  "version": 2,
+  "updated": "2026-03-19",
+  "tokenizers": [
+    {
+      "name": "gpt4.1",
+      "display_name": "GPT-4.1",
+      "backend": "tiktoken",
+      "model_id": "o200k_base",
+      "cost_input": 2.0,
+      "cost_output": 8.0
+    },
+    {
+      "name": "gpt4.1-mini",
+      "display_name": "GPT-4.1 mini",
+      "backend": "tiktoken",
+      "model_id": "o200k_base",
+      "cost_input": 0.4,
+      "cost_output": 1.6
+    },
+    {
+      "name": "gpt4.1-nano",
+      "display_name": "GPT-4.1 nano",
+      "backend": "tiktoken",
+      "model_id": "o200k_base",
+      "cost_input": 0.1,
+      "cost_output": 0.4
+    },
+    {
+      "name": "gpt4o",
+      "display_name": "GPT-4o",
+      "backend": "tiktoken",
+      "model_id": "o200k_base",
+      "cost_input": 2.5,
+      "cost_output": 10.0
+    },
+    {
+      "name": "gpt4o-mini",
+      "display_name": "GPT-4o mini",
+      "backend": "tiktoken",
+      "model_id": "o200k_base",
+      "cost_input": 0.15,
+      "cost_output": 0.6
+    },
+    {
+      "name": "claude-opus",
+      "display_name": "Claude Opus 4.6",
+      "backend": "transformers",
+      "model_id": "Xenova/claude-tokenizer",
+      "cost_input": 5.0,
+      "cost_output": 25.0
+    },
+    {
+      "name": "claude-sonnet",
+      "display_name": "Claude Sonnet 4.6",
+      "backend": "transformers",
+      "model_id": "Xenova/claude-tokenizer",
+      "cost_input": 3.0,
+      "cost_output": 15.0
+    },
+    {
+      "name": "claude-haiku",
+      "display_name": "Claude Haiku 4.5",
+      "backend": "transformers",
+      "model_id": "Xenova/claude-tokenizer",
+      "cost_input": 1.0,
+      "cost_output": 5.0
+    },
+    {
+      "name": "llama4",
+      "display_name": "Llama 4",
+      "backend": "transformers",
+      "model_id": "unsloth/Llama-4-Scout-17B-16E-Instruct",
+      "cost_input": 0.18,
+      "cost_output": 0.18
+    },
+    {
+      "name": "qwen3.5",
+      "display_name": "Qwen 3.5",
+      "backend": "transformers",
+      "model_id": "Qwen/Qwen3.5-4B",
+      "cost_input": 0.1,
+      "cost_output": 0.4
+    },
+    {
+      "name": "mistral-large",
+      "display_name": "Mistral Large 3",
+      "backend": "transformers",
+      "model_id": "mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+      "cost_input": 0.5,
+      "cost_output": 1.5
+    },
+    {
+      "name": "mistral-small",
+      "display_name": "Mistral Small",
+      "backend": "transformers",
+      "model_id": "mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+      "cost_input": 0.1,
+      "cost_output": 0.3
+    },
+    {
+      "name": "gemini-pro",
+      "display_name": "Gemini 2.5 Pro",
+      "backend": "transformers",
+      "model_id": "unsloth/gemma-3-1b-it",
+      "cost_input": 1.25,
+      "cost_output": 10.0
+    },
+    {
+      "name": "gemini-flash",
+      "display_name": "Gemini 3 Flash",
+      "backend": "transformers",
+      "model_id": "unsloth/gemma-3-1b-it",
+      "cost_input": 0.5,
+      "cost_output": 3.0
+    },
+    {
+      "name": "deepseek",
+      "display_name": "DeepSeek V3.2",
+      "backend": "tokenizer_fast",
+      "model_id": "deepseek-ai/DeepSeek-V3.2",
+      "cost_input": 0.27,
+      "cost_output": 1.1
+    },
+    {
+      "name": "grok",
+      "display_name": "Grok 2",
+      "backend": "transformers",
+      "model_id": "alvarobartt/grok-2-tokenizer",
+      "cost_input": 2.0,
+      "cost_output": 10.0
+    },
+    {
+      "name": "command-r",
+      "display_name": "Command R+",
+      "backend": "transformers",
+      "model_id": "Xenova/c4ai-command-r-v01-tokenizer",
+      "cost_input": 2.5,
+      "cost_output": 10.0
+    },
+    {
+      "name": "jamba",
+      "display_name": "Jamba 1.5",
+      "backend": "transformers",
+      "model_id": "ai21labs/Jamba-v0.1",
+      "cost_input": 0.2,
+      "cost_output": 0.4
+    }
+  ]
+}
