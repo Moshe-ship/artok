@@ -6,7 +6,7 @@ import json
 
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
+from rich.bar import Bar
 from rich.text import Text
 
 from artok.core import TokenizerInfo, TokenizerResult, count_words
@@ -14,12 +14,17 @@ from artok.core import TokenizerInfo, TokenizerResult, count_words
 console = Console()
 
 
+# ---------------------------------------------------------------------------
+# JSON output
+# ---------------------------------------------------------------------------
+
 def display_json(
     text: str,
     results: list[tuple[TokenizerInfo, TokenizerResult]],
     english_text: str | None = None,
     english_results: list[tuple[TokenizerInfo, TokenizerResult]] | None = None,
     cost_volume: float | None = None,
+    word_volume: float | None = None,
 ):
     """Output results as JSON."""
     words = count_words(text)
@@ -35,11 +40,12 @@ def display_json(
 
     tokenizers = []
     for info, result in results:
+        fertility = result.tokens / words if words > 0 else 0
         entry = {
             "name": info.name,
             "display_name": result.name,
             "tokens": result.tokens,
-            "tokens_per_word": round(result.tokens / words, 2) if words > 0 else 0,
+            "tokens_per_word": round(fertility, 2),
             "tax_vs_best": round(result.tokens / best_count, 2) if best_count > 0 else 0,
             "cost_per_1m_input": info.cost_input,
             "cost_per_1m_output": info.cost_output,
@@ -49,6 +55,18 @@ def display_json(
             entry["en_tokens"] = en_count
             entry["ar_en_ratio"] = round(result.tokens / en_count, 2) if en_count > 0 else 0
 
+        # Word volume estimation
+        if word_volume and info.cost_input:
+            est_tokens_m = word_volume * fertility
+            entry["word_estimate"] = {
+                "word_volume_millions": word_volume,
+                "estimated_tokens_millions": round(est_tokens_m, 2),
+                "input_cost": round(est_tokens_m * info.cost_input, 2),
+                "output_cost": round(est_tokens_m * (info.cost_output or 0), 2),
+                "total": round(est_tokens_m * info.cost_input + est_tokens_m * (info.cost_output or 0), 2),
+            }
+
+        # Token volume cost
         if cost_volume and info.cost_input:
             entry["cost_estimate"] = {
                 "volume_millions": cost_volume,
@@ -85,6 +103,9 @@ def display_json(
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
+# ---------------------------------------------------------------------------
+# Cost estimate sub-table
+# ---------------------------------------------------------------------------
 
 def _display_cost_estimate(
     results: list[tuple[TokenizerInfo, TokenizerResult]],
@@ -92,11 +113,7 @@ def _display_cost_estimate(
     en_lookup: dict[str, int],
     volume_m: float,
 ):
-    """Show cost estimate table for a given volume of tokens."""
-    # Calculate the token expansion ratio from sample text for each tokenizer
-    # Then project costs at volume scale
-    best_tokens = min(r.tokens for _, r in results)
-
+    """Show cost estimate table for a given token volume."""
     cost_table = Table(
         title=f"\n[bold]Cost Estimate for {volume_m:g}M tokens of Arabic text[/bold]",
         show_header=True,
@@ -118,10 +135,6 @@ def _display_cost_estimate(
         if not info.cost_input:
             continue
 
-        # Scale: the sample text ratio tells us how many "real" tokens
-        # the Arabic text expands to vs the best tokenizer.
-        # For cost estimation, we use the raw per-1M-token pricing
-        # applied to the volume the user specified.
         input_cost = volume_m * info.cost_input
         output_cost = volume_m * (info.cost_output or 0)
         total = input_cost + output_cost
@@ -136,8 +149,6 @@ def _display_cost_estimate(
         if english_results and en_lookup:
             en_count = en_lookup.get(info.name)
             if en_count and result.tokens > 0:
-                # Arabic uses X times more tokens than English
-                # So for the same content, English would need volume_m / ratio
                 ratio = result.tokens / en_count
                 en_volume = volume_m / ratio
                 en_total = en_volume * info.cost_input + en_volume * (info.cost_output or 0)
@@ -156,18 +167,269 @@ def _display_cost_estimate(
     console.print(cost_table)
 
     if english_results and en_lookup:
-        # Calculate total extra cost across cheapest option
-        cheapest_info, cheapest_result = min(
-            ((i, r) for i, r in results if i.cost_input),
-            key=lambda x: x[0].cost_input * volume_m,
+        console.print(
+            f"\n[dim]Note: \"Extra Cost\" = how much more you pay for Arabic vs "
+            f"English for the same semantic content at {volume_m:g}M tokens.[/dim]"
         )
-        en_count = en_lookup.get(cheapest_info.name)
-        if en_count and cheapest_result.tokens > 0:
-            ratio = cheapest_result.tokens / en_count
-            console.print(
-                f"\n[dim]Note: \"Extra Cost\" = how much more you pay for Arabic vs "
-                f"English for the same semantic content at {volume_m:g}M tokens.[/dim]"
-            )
+
+
+# ---------------------------------------------------------------------------
+# Word volume estimate sub-table
+# ---------------------------------------------------------------------------
+
+def _display_word_estimate(
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+    en_lookup: dict[str, int],
+    word_volume: float,
+    words: int,
+):
+    """Show cost estimate based on word count (accounts for token expansion)."""
+    word_table = Table(
+        title=f"\n[bold]Cost Estimate for {word_volume:g}M words of Arabic content[/bold]",
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    word_table.add_column("Tokenizer", style="bold white", min_width=14)
+    word_table.add_column("Est. Tokens", justify="right", style="yellow")
+    word_table.add_column("Input Cost", justify="right", style="yellow")
+    word_table.add_column("Output Cost", justify="right", style="yellow")
+    word_table.add_column("Total (I+O)", justify="right", style="bold green")
+
+    if en_lookup:
+        word_table.add_column("EN Total", justify="right", style="blue")
+        word_table.add_column("Extra Cost", justify="right")
+
+    for info, result in results:
+        if not info.cost_input:
+            continue
+
+        fertility = result.tokens / words if words > 0 else 0
+        est_tokens_m = word_volume * fertility
+        input_cost = est_tokens_m * info.cost_input
+        output_cost = est_tokens_m * (info.cost_output or 0)
+        total = input_cost + output_cost
+
+        row = [
+            result.name,
+            f"{est_tokens_m:.1f}M",
+            f"${input_cost:,.2f}",
+            f"${output_cost:,.2f}",
+            f"${total:,.2f}",
+        ]
+
+        if en_lookup:
+            en_count = en_lookup.get(info.name)
+            if en_count and words > 0:
+                en_fertility = en_count / words if words > 0 else 1
+                # Assume English has similar word count for same content
+                # but each word maps to fewer tokens
+                en_est_m = word_volume * en_fertility
+                en_total = en_est_m * info.cost_input + en_est_m * (info.cost_output or 0)
+                extra = total - en_total
+                row.append(f"${en_total:,.2f}")
+                if extra > 0:
+                    row.append(f"[red]+${extra:,.2f}[/red]")
+                else:
+                    row.append(f"[green]${extra:,.2f}[/green]")
+            else:
+                row.extend(["-", "-"])
+
+        word_table.add_row(*row)
+
+    console.print()
+    console.print(word_table)
+    console.print(
+        f"\n[dim]Token estimates based on the sample text's tokens-per-word ratio.[/dim]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bar chart
+# ---------------------------------------------------------------------------
+
+def display_chart(
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+    en_lookup: dict[str, int] | None = None,
+):
+    """Show a visual bar chart of token counts."""
+    if not results:
+        return
+
+    results.sort(key=lambda x: x[1].tokens)
+    max_tokens = max(r.tokens for _, r in results)
+
+    console.print()
+    console.print("[bold]Token Count Comparison[/bold]")
+    console.print()
+
+    bar_width = min(50, console.width - 30)
+
+    for info, result in results:
+        name = f"{result.name:14s}"
+        count = result.tokens
+        bar_len = int((count / max_tokens) * bar_width) if max_tokens > 0 else 0
+
+        # Color based on position
+        if count == min(r.tokens for _, r in results):
+            color = "green"
+        elif count == max_tokens:
+            color = "red"
+        else:
+            color = "yellow"
+
+        bar = f"[{color}]{'█' * bar_len}[/{color}]"
+        en_str = ""
+        if en_lookup:
+            en_count = en_lookup.get(info.name)
+            if en_count:
+                en_bar_len = int((en_count / max_tokens) * bar_width) if max_tokens > 0 else 0
+                en_str = f"  [blue]{'░' * en_bar_len}[/blue] [dim]{en_count} EN[/dim]"
+
+        console.print(f"  {name} {bar} {count}")
+        if en_str:
+            console.print(f"  {'':14s}{en_str}")
+
+    console.print()
+    console.print("[dim]  █ = Arabic tokens    ░ = English tokens[/dim]")
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Recommend
+# ---------------------------------------------------------------------------
+
+def display_recommend(
+    text: str,
+    results: list[tuple[TokenizerInfo, TokenizerResult]],
+    english_results: list[tuple[TokenizerInfo, TokenizerResult]] | None = None,
+    budget: float = 100.0,
+    word_volume: float | None = None,
+):
+    """Recommend the best tokenizer for a given budget."""
+    if not results:
+        console.print("[red]No tokenizers available.[/red]")
+        return
+
+    words = count_words(text)
+    console.print()
+    console.print(f"[bold magenta]artok[/bold magenta] [dim]- Budget Recommendation[/dim]")
+    console.print(f"\n[bold]Monthly budget:[/bold] ${budget:,.2f}")
+
+    if word_volume:
+        console.print(f"[bold]Content volume:[/bold] {word_volume:g}M words/month")
+    console.print()
+
+    rec_table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+
+    rec_table.add_column("Tokenizer", style="bold white", min_width=14)
+    rec_table.add_column("$/1M tok", justify="right", style="dim")
+    rec_table.add_column("Tok/Word", justify="right", style="dim white")
+
+    if word_volume:
+        rec_table.add_column("Monthly Cost", justify="right", style="yellow")
+        rec_table.add_column("Fits Budget?", justify="center")
+    else:
+        rec_table.add_column("Tokens/month", justify="right", style="yellow")
+        rec_table.add_column("Words/month", justify="right", style="dim")
+
+    rec_table.add_column("Verdict", min_width=12)
+
+    best_pick = None
+
+    # Sort by cost-effectiveness: most words per dollar
+    def _sort_key(item):
+        info, result = item
+        if not info.cost_input:
+            return float('inf')
+        fertility = result.tokens / words if words > 0 else 1
+        total_per_m = info.cost_input + (info.cost_output or 0)
+        if word_volume:
+            # Sort by monthly cost (lowest first that fits budget)
+            return fertility * total_per_m
+        else:
+            # Sort by words per dollar (highest first = lowest cost per word)
+            return fertility * total_per_m
+
+    results.sort(key=_sort_key)
+
+    for info, result in results:
+        if not info.cost_input:
+            continue
+
+        fertility = result.tokens / words if words > 0 else 1
+        total_per_m = info.cost_input + (info.cost_output or 0)
+
+        if word_volume:
+            # Calculate monthly cost for given word volume
+            est_tokens_m = word_volume * fertility
+            monthly_cost = est_tokens_m * total_per_m
+            fits = monthly_cost <= budget
+
+            if fits and best_pick is None:
+                best_pick = info.display_name
+
+            row = [
+                result.name,
+                f"${info.cost_input:.2f}",
+                f"{fertility:.2f}",
+                f"${monthly_cost:,.2f}",
+                "[green]YES[/green]" if fits else "[red]NO[/red]",
+            ]
+
+            if fits and result.name == best_pick:
+                row.append("[bold green]BEST PICK[/bold green]")
+            elif fits:
+                row.append("[green]Good option[/green]")
+            else:
+                row.append(f"[red]Need ${monthly_cost:,.0f}[/red]")
+        else:
+            # Calculate how many tokens you can afford
+            tokens_per_month_m = budget / total_per_m if total_per_m > 0 else 0
+            words_per_month_m = tokens_per_month_m / fertility if fertility > 0 else 0
+
+            if best_pick is None:
+                best_pick = info.display_name
+
+            row = [
+                result.name,
+                f"${info.cost_input:.2f}",
+                f"{fertility:.2f}",
+                f"{tokens_per_month_m:.1f}M",
+                f"{words_per_month_m:.1f}M",
+            ]
+
+            # The one that gives most words per dollar is best
+            # But we sort by token count, so cheapest + fewest tokens wins
+            if result.name == best_pick:
+                row.append("[bold green]BEST VALUE[/bold green]")
+            else:
+                row.append("")
+
+        rec_table.add_row(*row)
+
+    console.print(rec_table)
+
+    if best_pick:
+        console.print(f"\n[bold]Recommendation:[/bold] [green]{best_pick}[/green]")
+        if word_volume:
+            console.print(f"[dim]Best option that fits your ${budget:,.0f}/month budget for {word_volume:g}M words.[/dim]")
+        else:
+            console.print(f"[dim]Gives you the most Arabic words per dollar at ${budget:,.0f}/month.[/dim]")
+
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Main results display
+# ---------------------------------------------------------------------------
 
 def display_results(
     text: str,
@@ -176,6 +438,7 @@ def display_results(
     english_results: list[tuple[TokenizerInfo, TokenizerResult]] | None = None,
     show_tokens: bool = False,
     cost_volume: float | None = None,
+    word_volume: float | None = None,
 ):
     """Display token comparison table."""
     if not results:
@@ -292,6 +555,10 @@ def display_results(
     # Cost estimate mode
     if cost_volume is not None and cost_volume > 0:
         _display_cost_estimate(results, english_results, en_lookup, cost_volume)
+
+    # Word volume estimate mode
+    if word_volume is not None and word_volume > 0:
+        _display_word_estimate(results, en_lookup, word_volume, words)
 
     # Show actual tokens if requested
     if show_tokens:
