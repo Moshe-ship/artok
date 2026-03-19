@@ -1,0 +1,30 @@
+[project]
+name = "artok"
+version = "0.1.0"
+description = "Arabic Token Tax Calculator - see how much more Arabic costs across LLM tokenizers"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Mousa Abu Mazin" }]
+keywords = ["arabic", "tokenizer", "llm", "nlp", "tokens"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "tiktoken>=0.5.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+all = [
+    "transformers>=4.30.0",
+    "tokenizers>=0.15.0",
+]
+
+[project.scripts]
+artok = "artok.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
