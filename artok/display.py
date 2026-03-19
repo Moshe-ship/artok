@@ -247,6 +247,64 @@ def _display_word_estimate(
 
 
 # ---------------------------------------------------------------------------
+# Token visualization
+# ---------------------------------------------------------------------------
+
+_VIZ_COLORS = [
+    "bright_red", "bright_green", "bright_yellow", "bright_blue",
+    "bright_magenta", "bright_cyan", "red", "green", "yellow", "blue",
+    "magenta", "cyan", "bright_white", "dark_orange", "purple",
+]
+
+
+def display_viz(
+    text: str,
+    info: TokenizerInfo,
+    result: TokenizerResult,
+    pieces: list[str],
+):
+    """Visualize how a tokenizer splits text into tokens with colors."""
+    console.print()
+    console.print(f"[bold]{result.name}[/bold] tokenization ({result.tokens} tokens):")
+    console.print()
+
+    # Color each token piece differently
+    viz = Text()
+    for i, piece in enumerate(pieces):
+        color = _VIZ_COLORS[i % len(_VIZ_COLORS)]
+        display_piece = piece if piece.strip() else repr(piece)
+        viz.append(f"[{display_piece}]", style=f"bold {color}")
+
+    console.print(f"  {viz}")
+    console.print()
+
+    # Also show as a numbered list
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="dim",
+        padding=(0, 1),
+    )
+    table.add_column("#", justify="right", style="dim", width=4)
+    table.add_column("Token", style="bold")
+    table.add_column("ID", justify="right", style="dim")
+    table.add_column("Bytes", justify="right", style="dim")
+
+    for i, (piece, tid) in enumerate(zip(pieces, result.token_ids)):
+        color = _VIZ_COLORS[i % len(_VIZ_COLORS)]
+        byte_count = len(piece.encode("utf-8"))
+        table.add_row(
+            str(i + 1),
+            f"[{color}]{repr(piece)}[/{color}]",
+            str(tid),
+            str(byte_count),
+        )
+
+    console.print(table)
+    console.print()
+
+
+# ---------------------------------------------------------------------------
 # Bar chart
 # ---------------------------------------------------------------------------
 

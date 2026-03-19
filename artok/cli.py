@@ -12,12 +12,13 @@ import sys
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 _real_stderr = sys.stderr
 
-from artok.core import count_all, count_words, TOKENIZERS
+from artok.core import count_all, count_words, decode_tokens, TOKENIZERS
 from artok.display import (
     display_results,
     display_json,
     display_chart,
     display_recommend,
+    display_viz,
     console,
 )
 
@@ -115,6 +116,13 @@ def main():
         "--chart",
         action="store_true",
         help="Show a visual bar chart of token counts",
+    )
+    parser.add_argument(
+        "--viz",
+        type=str,
+        default=None,
+        metavar="TOKENIZER",
+        help="Visualize how a tokenizer splits the text (e.g., --viz gpt4o)",
     )
     parser.add_argument(
         "--batch",
@@ -234,6 +242,18 @@ def main():
             for info, result in english_results:
                 en_lookup[info.name] = result.tokens
         display_chart(results, en_lookup)
+
+    # --- Viz ---
+    if args.viz:
+        viz_names = [v.strip() for v in args.viz.split(",")]
+        for viz_name in viz_names:
+            matched = [(info, result) for info, result in results if info.name == viz_name]
+            if not matched:
+                console.print(f"[red]Tokenizer '{viz_name}' not found in results.[/red]")
+                continue
+            info, result = matched[0]
+            pieces = decode_tokens(info, result.token_ids)
+            display_viz(text, info, result, pieces)
 
 
 def _display_batch(

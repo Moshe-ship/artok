@@ -196,6 +196,20 @@ def count_tokens(text: str, info: TokenizerInfo) -> TokenizerResult | None:
     return None
 
 
+def decode_tokens(info: TokenizerInfo, token_ids: list[int]) -> list[str]:
+    """Decode individual token IDs back to text pieces."""
+    try:
+        if info.backend == "tiktoken":
+            enc = _load_tiktoken(info.model_id)
+            return [enc.decode([tid]) for tid in token_ids]
+        elif info.backend == "transformers":
+            tok = _load_hf_tokenizer(info.model_id)
+            return [tok.decode([tid]) for tid in token_ids]
+    except Exception:
+        return [f"[{tid}]" for tid in token_ids]
+    return []
+
+
 def count_all(text: str, only: list[str] | None = None) -> list[tuple[TokenizerInfo, TokenizerResult]]:
     """Count tokens across all available tokenizers."""
     results = []
