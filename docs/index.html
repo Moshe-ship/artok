@@ -196,6 +196,12 @@ footer a{color:var(--fg2)}
 .feat:nth-child(4){transition-delay:.15s}.feat:nth-child(5){transition-delay:.2s}.feat:nth-child(6){transition-delay:.25s}
 .feat:nth-child(7){transition-delay:.3s}.feat:nth-child(8){transition-delay:.35s}.feat:nth-child(9){transition-delay:.4s}
 .feat:nth-child(10){transition-delay:.45s}.feat:nth-child(11){transition-delay:.5s}.feat:nth-child(12){transition-delay:.55s}
+  /* Small phone (iPhone SE/mini) */
+  @media (max-width: 375px) { body { font-size: 13px; } h1 { font-size: 1.6rem !important; } pre, code { font-size: .7rem !important; } }
+  /* Landscape phone */
+  @media (max-height: 500px) and (orientation: landscape) { header { padding-top: 1rem !important; min-height: auto !important; } }
+  /* Safe area for notched phones */
+  @supports (padding: env(safe-area-inset-top)) { body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); } }
 </style>
 </head>
 <body>
